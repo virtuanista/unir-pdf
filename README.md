@@ -1,3 +1,5 @@
+<p align="center"><b>Español</b> · <a href="README.en.md">English</a></p>
+
 # Unir PDF
 
 ![Página local para unir PDF](docs/captura.webp)

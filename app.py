@@ -17,7 +17,7 @@ def index():
 @app.route('/merge', methods=['POST'])
 def merge_pdfs():
     if 'files' not in request.files:
-        return jsonify({'error': 'No files provided'}), 400
+        return jsonify({'error': 'No se ha enviado ningún archivo'}), 400
 
     files = request.files.getlist('files')
 
