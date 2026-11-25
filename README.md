@@ -1,5 +1,7 @@
 # Unir PDF
 
+![Página local para unir PDF](docs/captura.webp)
+
 Une varios PDF en uno solo desde una página local. Los archivos no salen de tu equipo y se procesan en memoria (hasta 500 MB en total).
 
 ## Usar
