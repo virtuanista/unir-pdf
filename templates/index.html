@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unir PDFs</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .container {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    padding: 40px;
+    max-width: 600px;
+    width: 100%;
+  }
+  h1 {
+    text-align: center;
+    color: #333;
+    margin-top: 0;
+    font-size: 28px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #888;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  #dropzone {
+    border: 3px dashed #764ba2;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #faf9ff;
+  }
+  #dropzone.dragover {
+    background: #ede9fe;
+    border-color: #667eea;
+  }
+  #dropzone p {
+    margin: 10px 0 0;
+    color: #666;
+  }
+  #dropzone .icon { font-size: 48px; }
+  #fileInput { display: none; }
+  #fileList {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+  }
+  #fileList li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f5f4ff;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 8px;
+    cursor: grab;
+    border: 1px solid #e0dcf7;
+  }
+  #fileList li.dragging { opacity: 0.4; }
+  .file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .file-info span.name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 320px;
+    font-size: 14px;
+    color: #333;
+  }
+  .order-badge {
+    background: #764ba2;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .remove-btn {
+    background: none;
+    border: none;
+    color: #d9534f;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0 6px;
+  }
+  #mergeBtn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: opacity 0.2s;
+  }
+  #mergeBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  #status {
+    text-align: center;
+    margin-top: 15px;
+    font-size: 14px;
+    min-height: 20px;
+  }
+  #status.error { color: #d9534f; }
+  #status.success { color: #28a745; }
+  .hint {
+    font-size: 12px;
+    color: #999;
+    text-align: center;
+    margin-top: 6px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>📎 Unir PDFs</h1>
+    <p class="subtitle">Sube varios PDFs, ordénalos y descarga uno solo</p>
+
+    <div id="dropzone">
+      <div class="icon">📄</div>
+      <p><strong>Haz clic o arrastra</strong> tus archivos PDF aquí</p>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf" multiple>
+
+    <ul id="fileList"></ul>
+    <p class="hint" id="dragHint" style="display:none;">Arrastra los archivos en la lista para reordenarlos</p>
+
+    <button id="mergeBtn" disabled>Unir PDFs</button>
+    <div id="status"></div>
+  </div>
+
+<script>
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const fileListEl = document.getElementById('fileList');
+  const mergeBtn = document.getElementById('mergeBtn');
+  const statusEl = document.getElementById('status');
+  const dragHint = document.getElementById('dragHint');
+
+  let files = [];
+
+  dropzone.addEventListener('click', () => fileInput.click());
+
+  dropzone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropzone.classList.add('dragover');
+  });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('dragover');
+    addFiles(e.dataTransfer.files);
+  });
+
+  fileInput.addEventListener('change', () => {
+    addFiles(fileInput.files);
+    fileInput.value = '';
+  });
+
+  function addFiles(fileListInput) {
+    for (const f of fileListInput) {
+      if (f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf')) {
+        files.push(f);
+      }
+    }
+    renderList();
+  }
+
+  function renderList() {
+    fileListEl.innerHTML = '';
+    dragHint.style.display = files.length > 1 ? 'block' : 'none';
+
+    files.forEach((f, idx) => {
+      const li = document.createElement('li');
+      li.draggable = true;
+      li.dataset.index = idx;
+
+      const sizeKB = (f.size / 1024).toFixed(0);
+      li.innerHTML = `
+        <div class="file-info">
+          <span class="order-badge">${idx + 1}</span>
+          <span class="name"></span>
+          <span style="color:#aaa; font-size:12px;">(${sizeKB} KB)</span>
+        </div>
+        <button class="remove-btn" title="Quitar">✕</button>
+      `;
+
+      li.querySelector('.name').textContent = f.name;
+
+      li.querySelector('.remove-btn').addEventListener('click', () => {
+        files.splice(idx, 1);
+        renderList();
+      });
+
+      li.addEventListener('dragstart', () => li.classList.add('dragging'));
+      li.addEventListener('dragend', () => {
+        li.classList.remove('dragging');
+        reorderFromDOM();
+      });
+      li.addEventListener('dragover', e => {
+        e.preventDefault();
+        const dragging = fileListEl.querySelector('.dragging');
+        if (dragging && dragging !== li) {
+          const rect = li.getBoundingClientRect();
+          const after = (e.clientY - rect.top) > rect.height / 2;
+          li.parentNode.insertBefore(dragging, after ? li.nextSibling : li);
+        }
+      });
+
+      fileListEl.appendChild(li);
+    });
+
+    mergeBtn.disabled = files.length < 2;
+    statusEl.textContent = '';
+    statusEl.className = '';
+  }
+
+  function reorderFromDOM() {
+    const newOrder = [...fileListEl.children].map(li => files[parseInt(li.dataset.index)]);
+    files = newOrder;
+    renderList();
+  }
+
+  mergeBtn.addEventListener('click', async () => {
+    if (files.length < 2) return;
+
+    mergeBtn.disabled = true;
+    statusEl.className = '';
+    statusEl.innerHTML = '<span class="spinner"></span>Uniendo PDFs...';
+
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+
+    try {
+      const res = await fetch('/merge', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Error al unir los PDFs');
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'PDFs_Unidos.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      statusEl.textContent = '✅ ¡PDF unido y descargado con éxito!';
+      statusEl.className = 'success';
+    } catch (err) {
+      statusEl.textContent = '❌ ' + err.message;
+      statusEl.className = 'error';
+    } finally {
+      mergeBtn.disabled = files.length < 2;
+    }
+  });
+</script>
+</body>
+</html>
